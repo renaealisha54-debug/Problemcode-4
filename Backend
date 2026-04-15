@@ -1,0 +1,30 @@
+import docker
+import uuid
+from fastapi import FastAPI, Header, HTTPException
+
+app = FastAPI()
+client = docker.from_env()
+
+@app.post("/api/execute")
+async def execute_code(payload: dict, x_api_key: str = Header(...)):
+    # 1. Validate your X-API-KEY
+    if x_api_key != "YOUR_SECURE_TOKEN_HERE":
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+
+    code = payload.get("code")
+    container_name = f"exec_{uuid.uuid4()}"
+    
+    # 2. Run the code in an isolated container
+    try:
+        # This spins up your Dockerfile environment
+        output = client.containers.run(
+            "problem-code-runner:latest",
+            command=f"python3 -c \"{code}\"",
+            detach=False,
+            network_mode="none",    # No internet access
+            mem_limit="128m",       # Prevent memory exhaustion
+            name=container_name
+        )
+        return {"result": output.decode('utf-8')}
+    except Exception as e:
+        return {"error": str(e)}
